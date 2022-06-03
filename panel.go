@@ -89,6 +89,7 @@ type (
 		Repeat           *string     `json:"repeat,omitempty"`   // templating options
 		// RepeatIteration *int64   `json:"repeatIteration,omitempty"`
 		RepeatPanelID *uint `json:"repeatPanelId,omitempty"`
+		MaxPerRow     *uint `json:"maxPerRow,omitempty"`
 		ScopedVars    map[string]struct {
 			Selected bool   `json:"selected"`
 			Text     string `json:"text"`
