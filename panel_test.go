@@ -22,6 +22,8 @@ package sdk_test
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/icza/gox/gox"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/K-Phoen/sdk"
@@ -797,4 +799,88 @@ func TestCustomPanelOutput_MarshalJSON(t *testing.T) {
 		t.Fatalf("wrong value of %s: got %s, expected %s", titleKey, val, titleValue)
 	}
 
+}
+
+func TestFieldConfigValueMapping_UnmarshalJSON(t *testing.T) {
+	//language=JSON
+	var rawMappings = []byte(`
+[
+  {
+    "options": {
+      "match": "null",
+      "result": {
+        "color": "red",
+        "index": 0
+      }
+    },
+    "type": "special"
+  },
+  {
+    "options": {
+      "from": 0,
+      "result": {
+        "color": "yellow",
+        "text": "value",
+        "index": 2
+      },
+      "to": 0
+    },
+    "type": "range"
+  },
+  {
+    "options": {
+      "index1": {
+        "color": "green",
+        "index": 1
+      },
+      "index2": {
+        "text": "override",
+        "index": 3
+      }
+    },
+    "type": "value"
+  }
+]`)
+
+	want := []sdk.FieldConfigValueMapping{
+		{
+			Type: sdk.FieldConfigValueMappingTypeSpecial,
+			Options: &sdk.SpecialValueMapOptions{
+				Match: sdk.SpecialValueMatchNull,
+				Result: sdk.ValueMappingResult{
+					Color: gox.NewString("red"),
+					Index: gox.NewInt(0),
+				},
+			},
+		}, {
+			Type: sdk.FieldConfigValueMappingTypeRange,
+			Options: &sdk.RangeMapOptions{
+				From: gox.NewFloat64(0),
+				To:   gox.NewFloat64(0),
+				Result: sdk.ValueMappingResult{
+					Text:  gox.NewString("value"),
+					Color: gox.NewString("yellow"),
+					Index: gox.NewInt(2),
+				},
+			},
+		}, {
+			Type: sdk.FieldConfigValueMappingTypeValue,
+			Options: &sdk.ValueMapOptions{
+				"index1": sdk.ValueMappingResult{
+					Color: gox.NewString("green"),
+					Index: gox.NewInt(1),
+				},
+				"index2": sdk.ValueMappingResult{
+					Text:  gox.NewString("override"),
+					Index: gox.NewInt(3),
+				},
+			},
+		},
+	}
+
+	var got []sdk.FieldConfigValueMapping
+	if err := json.Unmarshal(rawMappings, &got); err != nil {
+		t.Fatal(err)
+	}
+	require.Equal(t, want, got)
 }

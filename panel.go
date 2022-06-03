@@ -338,16 +338,22 @@ type (
 		Mode string `json:"mode"`
 	}
 	FieldConfigDefaults struct {
-		Unit       string            `json:"unit"`
-		NoValue    string            `json:"noValue,omitempty"`
-		Decimals   *int              `json:"decimals,omitempty"`
-		Min        *float64          `json:"min,omitempty"`
-		Max        *float64          `json:"max,omitempty"`
-		Color      FieldConfigColor  `json:"color"`
-		Thresholds Thresholds        `json:"thresholds"`
-		Custom     FieldConfigCustom `json:"custom"`
-		Links      []Link            `json:"links,omitempty"`
+		Unit       string                    `json:"unit"`
+		NoValue    string                    `json:"noValue,omitempty"`
+		Decimals   *int                      `json:"decimals,omitempty"`
+		Min        *float64                  `json:"min,omitempty"`
+		Max        *float64                  `json:"max,omitempty"`
+		Color      FieldConfigColor          `json:"color"`
+		Thresholds Thresholds                `json:"thresholds"`
+		Custom     FieldConfigCustom         `json:"custom"`
+		Links      []DataLink                `json:"links,omitempty"`
+		Mappings   []FieldConfigValueMapping `json:"mappings,omitempty"`
 	}
+	FieldConfigValueMapping struct {
+		Type    fieldConfigValueMappingType `json:"type"`
+		Options valueMappingOptions         `json:"options"`
+	}
+
 	FieldConfigOverrideProperty struct {
 		ID    string      `json:"id"`
 		Value interface{} `json:"value"`
@@ -421,7 +427,100 @@ type (
 		EnableLogDetails   bool   `json:"enableLogDetails"`
 	}
 	CustomPanel map[string]interface{}
+	DataLink    struct {
+		TargetBlank bool   `json:"targetBlank"`
+		Title       string `json:"title"`
+		Url         string `json:"url"`
+	}
 )
+
+// ValueMapping
+type fieldConfigValueMappingType string
+
+const (
+	FieldConfigValueMappingTypeValue   fieldConfigValueMappingType = "value"
+	FieldConfigValueMappingTypeRange   fieldConfigValueMappingType = "range"
+	FieldConfigValueMappingTypeRegex   fieldConfigValueMappingType = "regex"
+	FieldConfigValueMappingTypeSpecial fieldConfigValueMappingType = "special"
+)
+
+type specialValueMatchType string
+
+const (
+	SpecialValueMatchTrue       specialValueMatchType = "true"
+	SpecialValueMatchFalse      specialValueMatchType = "false"
+	SpecialValueMatchNull       specialValueMatchType = "null"
+	SpecialValueMatchNaN        specialValueMatchType = "nan"
+	SpecialValueMatchNullAndNaN specialValueMatchType = "null+nan"
+	SpecialValueMatchEmpty      specialValueMatchType = "empty"
+)
+
+type ValueMappingResult struct {
+	Text  *string `json:"text,omitempty"`
+	Color *string `json:"color,omitempty"`
+	Icon  *string `json:"icon,omitempty"`
+	Index *int    `json:"index,omitempty"`
+}
+
+type valueMappingOptions interface {
+	implementValueMappingOptions()
+}
+
+type ValueMapOptions map[string]ValueMappingResult
+
+func (m ValueMapOptions) implementValueMappingOptions() {}
+
+type RangeMapOptions struct {
+	From   *float64           `json:"from,omitempty"`
+	To     *float64           `json:"to,omitempty"`
+	Result ValueMappingResult `json:"result"`
+}
+
+func (f RangeMapOptions) implementValueMappingOptions() {}
+
+type RegexMapOptions struct {
+	Pattern string             `json:"pattern"`
+	Result  ValueMappingResult `json:"result"`
+}
+
+func (f RegexMapOptions) implementValueMappingOptions() {}
+
+type SpecialValueMapOptions struct {
+	Match  specialValueMatchType `json:"match"`
+	Result ValueMappingResult    `json:"result"`
+}
+
+func (f SpecialValueMapOptions) implementValueMappingOptions() {}
+
+func (m *FieldConfigValueMapping) UnmarshalJSON(b []byte) error {
+	probe := struct {
+		Type    fieldConfigValueMappingType `json:"type"`
+		Options json.RawMessage             `json:"options"`
+	}{}
+	if err := json.Unmarshal(b, &probe); err != nil {
+		return fmt.Errorf("unmarshalling into FieldConfigValueMapping: %w", err)
+	}
+
+	switch probe.Type {
+	case FieldConfigValueMappingTypeValue:
+		m.Options = &ValueMapOptions{}
+	case FieldConfigValueMappingTypeRange:
+		m.Options = &RangeMapOptions{}
+	case FieldConfigValueMappingTypeRegex:
+		m.Options = &RegexMapOptions{}
+	case FieldConfigValueMappingTypeSpecial:
+		m.Options = &SpecialValueMapOptions{}
+	default:
+		return fmt.Errorf("unknown ValueMapping type: %q", probe.Type)
+	}
+	m.Type = probe.Type
+
+	if err := json.Unmarshal(probe.Options, &m.Options); err != nil {
+		return fmt.Errorf("unmarshalling into %T: %w", m.Options, err)
+	}
+
+	return nil
+}
 
 // for a graph panel
 type (
