@@ -42,6 +42,7 @@ const (
 	HeatmapType
 	TimeseriesType
 	LogsType
+	GaugeType
 )
 
 const MixedSource = "-- Mixed --"
@@ -65,6 +66,7 @@ type (
 		*HeatmapPanel
 		*TimeseriesPanel
 		*LogsPanel
+		*GaugePanel
 		*CustomPanel
 	}
 	panelType   int8
@@ -425,6 +427,11 @@ type (
 		PrettifyLogMessage bool   `json:"prettifyLogMessage"`
 		SortOrder          string `json:"sortOrder"`
 		EnableLogDetails   bool   `json:"enableLogDetails"`
+	}
+	GaugePanel struct {
+		Targets     []Target    `json:"targets,omitempty"`
+		Options     StatOptions `json:"options"`
+		FieldConfig FieldConfig `json:"fieldConfig"`
 	}
 	CustomPanel map[string]interface{}
 	DataLink    struct {
@@ -825,6 +832,41 @@ func NewLogs(title string) *Panel {
 	}
 }
 
+// NewGauge initializes a new panel as a Gauge panel.
+func NewGauge(title string) *Panel {
+	if title == "" {
+		title = "Panel Title"
+	}
+
+	return &Panel{
+		CommonPanel: CommonPanel{
+			OfType: GaugeType,
+			Title:  title,
+			Type:   "gauge",
+			Span:   12,
+			IsNew:  true,
+		},
+		GaugePanel: &GaugePanel{
+			Options: StatOptions{
+				GraphMode: "none",
+				ReduceOptions: ReduceOptions{
+					Calcs: []string{"lastNotNull"},
+				},
+				Text: &TextOptions{},
+			},
+			FieldConfig: FieldConfig{
+				Defaults: FieldConfigDefaults{
+					Color: FieldConfigColor{
+						Mode:       "thresholds",
+						FixedColor: "green",
+						SeriesBy:   "last",
+					},
+				},
+			},
+		},
+	}
+}
+
 // NewTable initializes panel with a table panel.
 func NewTable(title string) *Panel {
 	if title == "" {
@@ -989,6 +1031,8 @@ func (p *Panel) ResetTargets() {
 		p.TimeseriesPanel.Targets = nil
 	case LogsType:
 		p.LogsPanel.Targets = nil
+	case GaugeType:
+		p.GaugePanel.Targets = nil
 	}
 }
 
@@ -1012,6 +1056,8 @@ func (p *Panel) AddTarget(t *Target) {
 		p.TimeseriesPanel.Targets = append(p.TimeseriesPanel.Targets, *t)
 	case LogsType:
 		p.LogsPanel.Targets = append(p.LogsPanel.Targets, *t)
+	case GaugeType:
+		p.GaugePanel.Targets = append(p.GaugePanel.Targets, *t)
 	}
 	// TODO check for existing refID
 }
@@ -1043,6 +1089,8 @@ func (p *Panel) SetTarget(t *Target) {
 		setTarget(t, &p.TimeseriesPanel.Targets)
 	case LogsType:
 		setTarget(t, &p.LogsPanel.Targets)
+	case GaugeType:
+		setTarget(t, &p.GaugePanel.Targets)
 	}
 }
 
@@ -1078,6 +1126,8 @@ func (p *Panel) RepeatDatasourcesForEachTarget(dsNames ...string) {
 		repeatDS(dsNames, &p.TimeseriesPanel.Targets)
 	case LogsType:
 		repeatDS(dsNames, &p.LogsPanel.Targets)
+	case GaugeType:
+		repeatDS(dsNames, &p.GaugePanel.Targets)
 	}
 }
 
@@ -1116,10 +1166,12 @@ func (p *Panel) RepeatTargetsForDatasources(dsNames ...string) {
 		repeatTarget(dsNames, &p.TimeseriesPanel.Targets)
 	case LogsType:
 		repeatTarget(dsNames, &p.LogsPanel.Targets)
+	case GaugeType:
+		repeatTarget(dsNames, &p.GaugePanel.Targets)
 	}
 }
 
-// GetTargets is iterate over all panel targets. It just returns nil if
+// GetTargets iterates over all panel targets. It just returns nil if
 // no targets defined for panel of concrete type.
 func (p *Panel) GetTargets() *[]Target {
 	switch p.OfType {
@@ -1139,6 +1191,8 @@ func (p *Panel) GetTargets() *[]Target {
 		return &p.TimeseriesPanel.Targets
 	case LogsType:
 		return &p.LogsPanel.Targets
+	case GaugeType:
+		return &p.GaugePanel.Targets
 	default:
 		return nil
 	}
@@ -1218,6 +1272,12 @@ func (p *Panel) UnmarshalJSON(b []byte) error {
 		p.OfType = LogsType
 		if err = json.Unmarshal(b, &logs); err == nil {
 			p.LogsPanel = &logs
+		}
+	case "gauge":
+		var gauge GaugePanel
+		p.OfType = GaugeType
+		if err = json.Unmarshal(b, &gauge); err == nil {
+			p.GaugePanel = &gauge
 		}
 	case "row":
 		var rowpanel RowPanel
@@ -1320,6 +1380,12 @@ func (p *Panel) MarshalJSON() ([]byte, error) {
 			LogsPanel
 		}{p.CommonPanel, *p.LogsPanel}
 		return json.Marshal(outLogs)
+	case GaugeType:
+		var outGauge = struct {
+			CommonPanel
+			GaugePanel
+		}{p.CommonPanel, *p.GaugePanel}
+		return json.Marshal(outGauge)
 	case CustomType:
 		var outCustom = customPanelOutput{
 			p.CommonPanel,
